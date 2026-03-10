@@ -23,3 +23,8 @@ export function dequeueReadyJob(type?: QueueJob["type"]): QueueJob | undefined {
 export function queueDepth() {
   return queue.length;
 }
+
+/** Test-only: clear all jobs. */
+export function clearQueueForTesting(): void {
+  queue.length = 0;
+}
