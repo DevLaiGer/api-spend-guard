@@ -75,6 +75,8 @@ It is focused on one high-value job: **detect abnormal spend fast and notify the
 - System design and architecture: `docs/system-design.md`
 - Developer setup and environment isolation: `docs/developer-setup.md`
 - Repository maintenance and contribution policy: `docs/repository-maintenance.md`
+- SLOs and observability: `docs/observability.md`
+- Contributor guide: `CONTRIBUTING.md`
 
 ---
 
