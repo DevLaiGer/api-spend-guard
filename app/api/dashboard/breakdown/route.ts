@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveTenantContext } from "@/lib/auth/tenant-context";
 import { getServiceClient } from "@/lib/supabase/client";
 
 export async function GET(request: NextRequest) {
-  const tenantId = request.nextUrl.searchParams.get("tenantId");
+  const tenant = await resolveTenantContext(request, { allowAnonymous: true });
   const day = request.nextUrl.searchParams.get("day");
-  if (!tenantId || !day) {
-    return NextResponse.json({ error: "tenantId and day are required" }, { status: 400 });
+  if (!tenant || !day) {
+    return NextResponse.json({ error: "authorization and day are required" }, { status: 400 });
   }
+  const tenantId = tenant.tenantId;
 
   const supabase = getServiceClient();
   const { data, error } = await supabase

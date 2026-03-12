@@ -22,8 +22,25 @@ Contributor local DB flow:
 
 ```bash
 npx supabase start
-npx supabase db push
+npx supabase db push --local
 ```
+
+#### Google OAuth (Continue with Google)
+
+Local Supabase has Google OAuth enabled in `supabase/config.toml`, but you must provide credentials and restart:
+
+1. In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), create a **Web application** OAuth 2.0 Client ID.
+2. Under **Authorized redirect URIs** add: `http://127.0.0.1:54321/auth/v1/callback`
+3. Copy the Client ID and Client Secret into your env (e.g. `.env` or `.env.local`):
+   - `SUPABASE_AUTH_GOOGLE_CLIENT_ID=<your_client_id>`
+   - `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=<your_client_secret>`
+4. Restart Supabase so Auth picks up the env:
+   ```bash
+   npx supabase stop
+   npx supabase start
+   ```
+
+For **hosted** Supabase (production or staging), enable Google in the Dashboard: **Authentication → Providers → Google**, and add the same redirect URI for your project’s auth URL.
 
 ### 3) Stripe Environment Split
 
@@ -75,9 +92,14 @@ Define these in `.env.local` using **development/test** credentials:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ENCRYPTION_SECRET`
 - `CRON_AUTH_TOKEN`
+- `ADMIN_AUTH_TOKEN`
+- `FREE_SESSION_SECRET`
+- `FINGERPRINT_SALT`
+- `NEXT_PUBLIC_APP_BASE_URL`
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (test key)
 - `STRIPE_SECRET_KEY` (test key)
 - `STRIPE_WEBHOOK_SECRET` (test endpoint secret)
+- `TELEGRAM_BOT_TOKEN` (optional)
 - `TWILIO_ACCOUNT_SID` (optional)
 - `TWILIO_AUTH_TOKEN` (optional)
 - `TWILIO_FROM_NUMBER` (optional)

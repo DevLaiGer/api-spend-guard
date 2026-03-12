@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getRuntimeCounters } from "@/lib/metrics";
 import { queueDepth } from "@/lib/queue/in-memory-queue";
 import { listDlq } from "@/lib/queue/dlq";
 import { getServiceClient } from "@/lib/supabase/client";
@@ -17,7 +18,8 @@ export async function GET() {
       dlqDepth: listDlq().length,
       openAlerts: openAlerts ?? 0,
       failedDeliveries: failedDeliveries ?? 0,
-      failedRuns: failedRuns ?? 0
+      failedRuns: failedRuns ?? 0,
+      ...getRuntimeCounters()
     });
   } catch (error) {
     return NextResponse.json(

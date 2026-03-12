@@ -75,6 +75,8 @@ Unit tests for detection, idempotency, queue, DLQ, encryption, and alerting live
 | A2 | **Edge:** Discord empty webhook | { ok: false, error: "missing_discord_webhook" } |
 | A3 | **Edge:** SMS, Twilio not configured | { ok: false, error: "twilio_not_configured" } |
 | A4 | **Edge:** SMS, empty destination | { ok: false, error: "missing_destination" } |
+| A5 | **Happy:** Telegram with chat id and bot token | fetch called to Telegram API |
+| A6 | **Edge:** Telegram missing destination/token | explicit error |
 
 ---
 
@@ -93,11 +95,11 @@ Unit tests for detection, idempotency, queue, DLQ, encryption, and alerting live
 
 | ID | Scenario | Expected |
 |----|----------|----------|
-| P1 | **Happy:** tenantId + provider + apiKey | 200, { status: "connected" } |
-| P2 | **Edge:** Missing tenantId | 400, error message |
+| P1 | **Happy:** auth/free session + provider + apiKey | 200, { status: "connected" } |
+| P2 | **Edge:** missing auth and no free session | 401 |
 | P3 | **Edge:** Missing provider | 400 |
 | P4 | **Edge:** Missing apiKey | 400 |
-| P5 | **Edge:** Invalid JSON body | 500 or 400 |
+| P5 | **Edge:** Exceed plan key limit | 403 provider_limit_reached |
 
 ---
 
@@ -105,8 +107,29 @@ Unit tests for detection, idempotency, queue, DLQ, encryption, and alerting live
 
 | ID | Scenario | Expected |
 |----|----------|----------|
-| POL1 | **Happy:** Valid tenantId + limits | 200, { status: "saved" } |
-| POL2 | **Edge:** Missing tenantId | 400 |
+| POL1 | **Happy:** authorized request + limits | 200, { status: "saved" } |
+| POL2 | **Edge:** Missing auth context | 401 |
+| POL3 | **Edge:** Free plan with SMS destination | 403 sms_not_enabled_for_plan |
+
+---
+
+## 9.1 API: POST /api/onboarding/free
+
+| ID | Scenario | Expected |
+|----|----------|----------|
+| OF1 | **Happy:** valid free payload | 200, sets `asg_free_session` cookie |
+| OF2 | **Edge:** Missing provider or api key | 400 |
+| OF3 | **Edge:** same fingerprint tries second free tenant | 429 |
+
+---
+
+## 9.2 API: GET /api/providers/keys
+
+| ID | Scenario | Expected |
+|----|----------|----------|
+| K1 | **Happy:** free session | 200 with accounts + plan |
+| K2 | **Happy:** OAuth bearer token | 200 with accounts + plan |
+| K3 | **Edge:** no auth context | 401 |
 
 ---
 

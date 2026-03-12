@@ -1,6 +1,7 @@
 import { decryptSecret } from "@/lib/encryption";
 import { getServiceClient } from "@/lib/supabase/client";
 import type { IngestJobPayload, PolicyConfig, ProviderName, SpendSample } from "@/lib/types";
+import type { PlanEntitlements } from "@/lib/billing/entitlements";
 
 export async function getDueTenantsByMinute(minute: number) {
   const supabase = getServiceClient();
@@ -12,6 +13,66 @@ export async function getDueTenantsByMinute(minute: number) {
     .limit(100);
   if (error) throw error;
   return (data ?? []) as Array<{ id: string; check_minute: number }>;
+}
+
+export async function createTenant(params: { name: string; planTier?: string }) {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("tenants")
+    .insert({
+      name: params.name,
+      plan_tier: params.planTier ?? "free",
+      check_minute: Math.floor(Math.random() * 60),
+      status: "active"
+    })
+    .select("id, name, plan_tier")
+    .single();
+  if (error) throw error;
+  return data as { id: string; name: string; plan_tier: string };
+}
+
+export async function addTenantMember(params: { tenantId: string; userId: string; role?: string }) {
+  const supabase = getServiceClient();
+  const { error } = await supabase.from("tenant_members").upsert(
+    {
+      tenant_id: params.tenantId,
+      user_id: params.userId,
+      role: params.role ?? "owner"
+    },
+    { onConflict: "tenant_id,user_id" }
+  );
+  if (error) throw error;
+}
+
+export async function getOrCreateTenantForUser(params: { userId: string; email: string }) {
+  const supabase = getServiceClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("tenant_members")
+    .select("tenant_id, role")
+    .eq("user_id", params.userId)
+    .limit(1)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing?.tenant_id) {
+    return { id: existing.tenant_id as string };
+  }
+
+  const fallbackName = params.email ? `${params.email.split("@")[0]}'s Workspace` : "My Workspace";
+  const tenant = await createTenant({ name: fallbackName, planTier: "free" });
+  await addTenantMember({ tenantId: tenant.id, userId: params.userId, role: "owner" });
+  return { id: tenant.id };
+}
+
+export async function assertTenantAccess(params: { tenantId: string; userId: string }) {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("tenant_members")
+    .select("tenant_id")
+    .eq("tenant_id", params.tenantId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.tenant_id);
 }
 
 export async function getTenantProviders(tenantId: string): Promise<ProviderName[]> {
@@ -27,6 +88,17 @@ export async function getTenantProviders(tenantId: string): Promise<ProviderName
   );
 }
 
+export async function getProviderAccountCount(tenantId: string) {
+  const supabase = getServiceClient();
+  const { count, error } = await supabase
+    .from("provider_accounts")
+    .select("*", { head: true, count: "exact" })
+    .eq("tenant_id", tenantId)
+    .eq("status", "active");
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function getProviderApiKey(tenantId: string, provider: ProviderName): Promise<string> {
   const supabase = getServiceClient();
   const { data, error } = await supabase
@@ -37,6 +109,27 @@ export async function getProviderApiKey(tenantId: string, provider: ProviderName
     .single();
   if (error) throw error;
   return decryptSecret(data.encrypted_key as string);
+}
+
+export async function listProviderAccounts(tenantId: string) {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("provider_accounts")
+    .select("id, provider, key_scope, status, created_at, updated_at")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function disconnectProviderAccount(tenantId: string, provider: string) {
+  const supabase = getServiceClient();
+  const { error } = await supabase
+    .from("provider_accounts")
+    .update({ status: "inactive" })
+    .eq("tenant_id", tenantId)
+    .eq("provider", provider);
+  if (error) throw error;
 }
 
 export async function upsertSyncRun(payload: IngestJobPayload, status: string, errorCount = 0) {
@@ -100,6 +193,64 @@ export async function getTenantPolicy(tenantId: string): Promise<PolicyConfig> {
   };
 }
 
+export async function getPlanEntitlements(tenantId: string): Promise<PlanEntitlements> {
+  const supabase = getServiceClient();
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("plan_code, status")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  const planCode =
+    subscription?.status === "active" && subscription?.plan_code
+      ? String(subscription.plan_code)
+      : "free";
+
+  const { data: plan, error } = await supabase
+    .from("plans")
+    .select("code, max_provider_accounts, sms_enabled, telegram_enabled, discord_enabled")
+    .eq("code", planCode)
+    .single();
+  if (error) throw error;
+  return {
+    code: String(plan.code),
+    maxProviderAccounts: Number(plan.max_provider_accounts ?? 1),
+    smsEnabled: Boolean(plan.sms_enabled),
+    telegramEnabled: Boolean(plan.telegram_enabled),
+    discordEnabled: Boolean(plan.discord_enabled)
+  };
+}
+
+export async function upsertSubscription(params: {
+  tenantId: string;
+  planCode: string;
+  status: string;
+  provider: string;
+  providerSubscriptionId?: string;
+  currentPeriodEnd?: string;
+}) {
+  const supabase = getServiceClient();
+  const { error } = await supabase.from("subscriptions").upsert(
+    {
+      tenant_id: params.tenantId,
+      plan_code: params.planCode,
+      status: params.status,
+      provider: params.provider,
+      provider_subscription_id: params.providerSubscriptionId ?? null,
+      current_period_end: params.currentPeriodEnd ?? null,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "tenant_id" }
+  );
+  if (error) throw error;
+
+  const { error: tenantError } = await supabase
+    .from("tenants")
+    .update({ plan_tier: params.planCode })
+    .eq("id", params.tenantId);
+  if (tenantError) throw tenantError;
+}
+
 export async function getSpendSnapshot(tenantId: string) {
   const supabase = getServiceClient();
   const { data, error } = await supabase.rpc("get_spend_snapshot", {
@@ -154,6 +305,17 @@ export async function getDiscordWebhook(tenantId: string) {
   return (data.discord_webhook_url as string) ?? "";
 }
 
+export async function getTelegramDestination(tenantId: string) {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("policies")
+    .select("telegram_chat_id")
+    .eq("tenant_id", tenantId)
+    .single();
+  if (error) throw error;
+  return (data.telegram_chat_id as string) ?? "";
+}
+
 export async function getSmsDestination(tenantId: string) {
   const supabase = getServiceClient();
   const { data, error } = await supabase
@@ -163,6 +325,53 @@ export async function getSmsDestination(tenantId: string) {
     .single();
   if (error) throw error;
   return (data.sms_to_number as string) ?? "";
+}
+
+export async function createAnonymousSession(params: { fingerprintHash: string; ipHash: string }) {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("anonymous_sessions")
+    .insert({
+      fingerprint_hash: params.fingerprintHash,
+      ip_hash: params.ipHash,
+      status: "active"
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+export async function countActiveAnonymousTenants(fingerprintHash: string) {
+  const supabase = getServiceClient();
+  const { count, error } = await supabase
+    .from("anonymous_sessions")
+    .select("*", { count: "exact", head: true })
+    .eq("fingerprint_hash", fingerprintHash)
+    .eq("status", "active");
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function linkAnonymousTenant(params: { sessionId: string; tenantId: string }) {
+  const supabase = getServiceClient();
+  const { error } = await supabase.from("anonymous_tenants").insert({
+    anonymous_session_id: params.sessionId,
+    tenant_id: params.tenantId
+  });
+  if (error) throw error;
+}
+
+export async function getTenantByAnonymousSession(sessionId: string) {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("anonymous_tenants")
+    .select("tenant_id")
+    .eq("anonymous_session_id", sessionId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data?.tenant_id as string | undefined) ?? null;
 }
 
 export async function insertAlertDelivery(params: {

@@ -1,16 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canAddProviderKey } from "@/lib/billing/entitlements";
+import { resolveTenantContext } from "@/lib/auth/tenant-context";
 import { encryptSecret } from "@/lib/encryption";
+import { incrementPlanGateDenials } from "@/lib/metrics";
 import { getServiceClient } from "@/lib/supabase/client";
+import {
+  getPlanEntitlements,
+  getProviderAccountCount
+} from "@/lib/supabase/repository";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const tenantId = String(body.tenantId ?? "");
+  const tenant = await resolveTenantContext(request, { allowAnonymous: true });
+  if (!tenant) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const tenantId = tenant.tenantId;
   const provider = String(body.provider ?? "");
   const apiKey = String(body.apiKey ?? "");
   const keyScope = String(body.keyScope ?? "billing_read");
 
-  if (!tenantId || !provider || !apiKey) {
-    return NextResponse.json({ error: "tenantId, provider, apiKey are required" }, { status: 400 });
+  if (!provider || !apiKey) {
+    return NextResponse.json({ error: "provider and apiKey are required" }, { status: 400 });
+  }
+
+  const [plan, currentCount] = await Promise.all([
+    getPlanEntitlements(tenantId),
+    getProviderAccountCount(tenantId)
+  ]);
+  if (!canAddProviderKey(plan, currentCount)) {
+    incrementPlanGateDenials();
+    return NextResponse.json(
+      {
+        error: "provider_limit_reached",
+        maxProviderAccounts: plan.maxProviderAccounts
+      },
+      { status: 403 }
+    );
   }
 
   const supabase = getServiceClient();
@@ -28,5 +54,5 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ status: "connected" });
+  return NextResponse.json({ status: "connected", tenantMode: tenant.mode });
 }

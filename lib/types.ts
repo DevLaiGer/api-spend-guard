@@ -18,7 +18,7 @@ export type AlertJobPayload = {
   alertId: string;
   tenantId: string;
   provider: ProviderName;
-  channel: "discord" | "sms";
+  channel: "discord" | "telegram" | "sms";
   destination: string;
   message: string;
   attempt: number;

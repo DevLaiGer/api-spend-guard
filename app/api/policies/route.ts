@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canUseSms } from "@/lib/billing/entitlements";
+import { resolveTenantContext } from "@/lib/auth/tenant-context";
+import { incrementPlanGateDenials } from "@/lib/metrics";
 import { getServiceClient } from "@/lib/supabase/client";
+import { getPlanEntitlements } from "@/lib/supabase/repository";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const tenantId = String(body.tenantId ?? "");
-  if (!tenantId) {
-    return NextResponse.json({ error: "tenantId is required" }, { status: 400 });
+  const tenant = await resolveTenantContext(request, { allowAnonymous: true });
+  if (!tenant) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const tenantId = tenant.tenantId;
+  const entitlements = await getPlanEntitlements(tenantId);
+  const smsToNumber = body.smsToNumber ?? null;
+  if (smsToNumber && !canUseSms(entitlements)) {
+    incrementPlanGateDenials();
+    return NextResponse.json({ error: "sms_not_enabled_for_plan" }, { status: 403 });
   }
   const supabase = getServiceClient();
   const { error } = await supabase.from("policies").upsert(
@@ -16,7 +27,8 @@ export async function POST(request: NextRequest) {
       burst_window_min: Number(body.burstWindowMin ?? 60),
       cooldown_min: Number(body.cooldownMin ?? 30),
       discord_webhook_url: body.discordWebhookUrl ?? null,
-      sms_to_number: body.smsToNumber ?? null
+      telegram_chat_id: body.telegramChatId ?? null,
+      sms_to_number: smsToNumber
     },
     { onConflict: "tenant_id" }
   );

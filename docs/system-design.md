@@ -34,6 +34,12 @@ This separation keeps sensitive control operations minimal while allowing ingest
 Design rule: use push where providers natively support budget events, and fall back to pull where they do not.  
 Both paths feed the same normalization pipeline so downstream logic remains provider-agnostic.
 
+### 2.1) Dual-Mode Access Model
+
+- **No-auth free mode:** one provider key and Discord/Telegram alert destination, protected with device fingerprint limits and signed anonymous session token.
+- **OAuth mode:** user signs in with Supabase OAuth, tenant is mapped through `tenant_members`, and plan entitlements are derived from `subscriptions` + `plans`.
+- **Plan enforcement:** key count, SMS access, and channel permissions are checked server-side for every mutation route.
+
 ### 3) MVP Operating Mode (30-Day Build)
 
 To preserve zero-friction onboarding and ship quickly:

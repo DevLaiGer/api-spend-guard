@@ -22,9 +22,10 @@ Teams need a proactive cost alarm, not a post-mortem.
 API Spend Guard gives you one place to monitor API costs and react early.
 
 - **Unified spend visibility:** Daily and monthly breakdowns across providers
-- **Threshold-based alerts:** Discord and SMS notifications the moment spend spikes
+- **Threshold-based alerts:** Discord, Telegram, and SMS notifications when spend spikes
 - **Read-only by design:** No proxying production traffic; no latency impact
 - **Encrypted credentials:** API keys encrypted at rest with server-side controls
+- **Dual onboarding modes:** no-auth free mode (single key) and OAuth mode (multi-key with paid tier)
 
 ---
 
@@ -67,6 +68,7 @@ It is focused on one high-value job: **detect abnormal spend fast and notify the
 - **Per-user guardrails:** Store budget thresholds and alert channels by tenant
 - **Secure key lifecycle:** Encrypt at write, decrypt only in scheduled workers
 - **Modular provider integration:** Add new providers with isolated adapter functions
+- **Free + Pro tiers:** Free supports 1 key + Discord/Telegram, Pro unlocks 5 keys and SMS
 
 ---
 
@@ -74,6 +76,7 @@ It is focused on one high-value job: **detect abnormal spend fast and notify the
 
 - System design and architecture: `docs/system-design.md`
 - Developer setup and environment isolation: `docs/developer-setup.md`
+- **Cursor + Figma (MCP):** Project includes `.cursor/mcp.json` for the [Framelink MCP for Figma](https://www.npmjs.com/package/figma-developer-mcp). Add a Figma personal access token in Cursor **Settings → MCP** (env `FIGMA_API_KEY`) to get design-to-code context from Figma links in chat.
 - Repository maintenance and contribution policy: `docs/repository-maintenance.md`
 - SLOs and observability: `docs/observability.md`
 - Test cases (happy paths and edge): `docs/test-cases.md`

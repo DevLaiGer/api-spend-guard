@@ -1,10 +1,15 @@
 import crypto from "node:crypto";
 import { evaluatePolicy } from "@/lib/detection";
+import { canUseDiscord, canUseSms, canUseTelegram } from "@/lib/billing/entitlements";
 import { enqueueJob } from "@/lib/queue/in-memory-queue";
 import { getProviderAdapter } from "@/lib/providers";
 import {
+  getDiscordWebhook,
+  getPlanEntitlements,
+  getSmsDestination,
   getProviderApiKey,
   getSpendSnapshot,
+  getTelegramDestination,
   getTenantPolicy,
   insertAlert,
   insertUsageEvents,
@@ -40,6 +45,12 @@ export async function runIngestJob(job: IngestJobPayload) {
     burstSpendUsd: snapshot.burst_spend_usd,
     policy
   });
+  const [entitlements, discordWebhook, telegramChatId, smsNumber] = await Promise.all([
+    getPlanEntitlements(job.tenantId),
+    getDiscordWebhook(job.tenantId),
+    getTelegramDestination(job.tenantId),
+    getSmsDestination(job.tenantId)
+  ]);
 
   for (const signal of signals) {
     const fingerprint = crypto
@@ -55,20 +66,54 @@ export async function runIngestJob(job: IngestJobPayload) {
       fingerprint
     });
 
-    enqueueJob({
-      type: "DISPATCH_ALERT",
-      payload: {
-        alertId,
-        tenantId: job.tenantId,
-        provider: job.provider,
-        channel: "discord",
-        destination: "",
-        message: signal.message,
-        attempt: 0
-      },
-      retries: 0,
-      visibleAt: new Date().toISOString()
-    });
+    if (discordWebhook && canUseDiscord(entitlements)) {
+      enqueueJob({
+        type: "DISPATCH_ALERT",
+        payload: {
+          alertId,
+          tenantId: job.tenantId,
+          provider: job.provider,
+          channel: "discord",
+          destination: discordWebhook,
+          message: signal.message,
+          attempt: 0
+        },
+        retries: 0,
+        visibleAt: new Date().toISOString()
+      });
+    }
+    if (telegramChatId && canUseTelegram(entitlements)) {
+      enqueueJob({
+        type: "DISPATCH_ALERT",
+        payload: {
+          alertId,
+          tenantId: job.tenantId,
+          provider: job.provider,
+          channel: "telegram",
+          destination: telegramChatId,
+          message: signal.message,
+          attempt: 0
+        },
+        retries: 0,
+        visibleAt: new Date().toISOString()
+      });
+    }
+    if (smsNumber && canUseSms(entitlements)) {
+      enqueueJob({
+        type: "DISPATCH_ALERT",
+        payload: {
+          alertId,
+          tenantId: job.tenantId,
+          provider: job.provider,
+          channel: "sms",
+          destination: smsNumber,
+          message: signal.message,
+          attempt: 0
+        },
+        retries: 0,
+        visibleAt: new Date().toISOString()
+      });
+    }
   }
 
   await upsertSyncRun(job, "completed");

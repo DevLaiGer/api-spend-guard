@@ -1,3 +1,5 @@
+import { env } from "@/lib/env";
+import { AuthenticatedShell } from "@/app/components/authenticated-shell";
 import { getServiceClient } from "@/lib/supabase/client";
 
 async function getAdminData() {
@@ -21,19 +23,39 @@ async function getAdminData() {
   }
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
+  const query = await searchParams;
+  if (!env.adminAuthToken || query.token !== env.adminAuthToken) {
+    return (
+      <main className="auth-wrap">
+        <section className="auth-card">
+          <h1 className="auth-title">Admin Diagnostics</h1>
+          <p className="error-text">Unauthorized.</p>
+        </section>
+      </main>
+    );
+  }
   const { errors, runs } = await getAdminData();
   return (
-    <main>
-      <h1>Admin Diagnostics</h1>
-      <div className="card">
-        <h2>Fire Alarm: Recent Errors</h2>
-        <pre>{JSON.stringify(errors, null, 2)}</pre>
+    <AuthenticatedShell>
+      <div className="stack">
+        <div>
+          <h1 className="hero-title">Admin Diagnostics</h1>
+          <p className="hero-subtitle">Operational triage, sync health, and failure logs.</p>
+        </div>
+        <section className="card panel">
+          <h2 style={{ marginTop: 0 }}>Fire Alarm: Recent Errors</h2>
+          <pre>{JSON.stringify(errors, null, 2)}</pre>
+        </section>
+        <section className="card panel">
+          <h2 style={{ marginTop: 0 }}>Sync Health</h2>
+          <pre>{JSON.stringify(runs, null, 2)}</pre>
+        </section>
       </div>
-      <div className="card">
-        <h2>Sync Health</h2>
-        <pre>{JSON.stringify(runs, null, 2)}</pre>
-      </div>
-    </main>
+    </AuthenticatedShell>
   );
 }

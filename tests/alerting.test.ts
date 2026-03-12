@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { sendDiscordAlert, sendSmsAlert } from "@/lib/alerting";
+import { sendDiscordAlert, sendSmsAlert, sendTelegramAlert } from "@/lib/alerting";
 
 describe("alerting", () => {
   beforeEach(() => {
@@ -40,8 +40,12 @@ describe("alerting", () => {
   it("A4: SMS empty destination returns error", async () => {
     const result = await sendSmsAlert("", "msg");
     expect(result.ok).toBe(false);
-    expect(["missing_destination", "twilio_not_configured"]).toContain(
-      (result as { error?: string }).error
-    );
+    expect((result as { error?: string }).error).toBe("missing_destination");
+  });
+
+  it("A5: Telegram missing chat id returns error", async () => {
+    const result = await sendTelegramAlert("", "msg");
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ error: "missing_telegram_chat_id" });
   });
 });

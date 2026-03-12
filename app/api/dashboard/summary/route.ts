@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveTenantContext } from "@/lib/auth/tenant-context";
 import { getServiceClient } from "@/lib/supabase/client";
 
 export async function GET(request: NextRequest) {
-  const tenantId = request.nextUrl.searchParams.get("tenantId");
+  const tenant = await resolveTenantContext(request, { allowAnonymous: true });
   const range = request.nextUrl.searchParams.get("range") ?? "7d";
-  if (!tenantId) {
-    return NextResponse.json({ error: "tenantId is required" }, { status: 400 });
+  if (!tenant) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const tenantId = tenant.tenantId;
   const supabase = getServiceClient();
   const { data, error } = await supabase.rpc("get_dashboard_summary", {
     p_tenant_id: tenantId,
