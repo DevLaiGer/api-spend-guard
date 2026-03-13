@@ -7,6 +7,15 @@ import { useRouter } from "next/navigation";
 import { Logo } from "@/app/components/logo";
 import { getBrowserClient } from "@/lib/supabase/browser-client";
 
+async function startGoogleOAuth(plan: string = "free") {
+  const supabase = getBrowserClient();
+  const redirectTo = `${window.location.origin}/onboarding/auth?plan=${encodeURIComponent(plan)}`;
+  await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo }
+  });
+}
+
 export default function SigninPage() {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -72,10 +81,10 @@ export default function SigninPage() {
         </div>
 
         <div className="auth-methods">
-          <Link className="button-link" href="/api/auth/oauth/start?provider=google&plan=free">
+          <button className="button-link" onClick={() => startGoogleOAuth("free")}>
             Continue with Google
             <ArrowRight size={16} />
-          </Link>
+          </button>
           <Link className="button-link button-secondary" href="/onboarding/free">
             Start Free (No Auth)
           </Link>

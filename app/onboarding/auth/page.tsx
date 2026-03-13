@@ -105,8 +105,13 @@ export default function AuthOnboardingPage() {
     return () => subscription.unsubscribe();
   }, [router]);
 
-  function handleGoogleOAuth() {
-    window.location.href = `/api/auth/oauth/start?provider=google&plan=${encodeURIComponent(planCode)}`;
+  async function handleGoogleOAuth() {
+    const supabase = getBrowserClient();
+    const redirectTo = `${window.location.origin}/onboarding/auth?plan=${encodeURIComponent(planCode)}`;
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo }
+    });
   }
 
   const isLoading = status === "loading";
