@@ -14,12 +14,12 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
     "next": "^15.3.3",
-    "react": "^19.0.0",
+    "react": "^19.2.7",
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "@types/react": "^19.0.2",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "^19.0.2",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.3.3",
